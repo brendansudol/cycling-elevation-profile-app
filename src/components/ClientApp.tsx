@@ -23,9 +23,20 @@ export default function ClientApp({ data, config }: { data: ClimbData; config: C
     downloadPNG(svg, (data.name || "climb") + ".png", 2)
   }
 
+  // const [data2, setData2] = React.useState<ClimbData | null>(null)
+  // React.useEffect(() => {
+  //   ;(async () => {
+  //     const res = await fetch("/api/strava/segment/5399200?bins_km=1")
+  //     const results = await res.json()
+  //     console.log("strava results:", results)
+  //     setData2({ name: results.name, segments: results.profile.segments })
+  //   })()
+  // }, [])
+
   return (
     <>
       <ProfileChart data={data} config={config} svgRef={svgRef} />
+      {/* {data2 != null && <ProfileChart data={data2} config={config} svgRef={svgRef} />} */}
       <div style={{ display: "flex", gap: 8, margin: "12px auto 24px", justifyContent: "center" }}>
         <button onClick={handleDownloadSVG}>Download SVG</button>
         <button onClick={handleDownloadPNG}>Download PNG</button>
