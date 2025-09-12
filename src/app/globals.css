@@ -1,26 +1,100 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Page palette */
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --ink: #111827;
+  --muted: #6b7280;
+
+  /* Chart palette (also inlined onto <svg> for PNG export) */
+  --face-yellow: #f7e84a;
+  --grid: rgba(0, 0, 0, 0.18);
+  --road-stroke: #2c2c2c;
+  --centerline: #ffffff;
+
+  /* Platform shelf */
+  --platform: #d1d5db; /* shelf top */
+  --platform-wall: #c0c6cf; /* start wall (slightly darker) */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, Arial;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.shell {
+  width: min(1150px, 92vw);
+  margin: 18px auto;
+}
+
+header.shell {
+  margin-top: 24px;
+}
+
+h1 {
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  margin: 0 0 0.25rem;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.footnote {
+  color: var(--muted);
+  text-align: center;
+  margin: 20px auto 40px;
+}
+
+.stage {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  min-height: 520px;
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+button {
+  appearance: none;
+  border: 1px solid #d0d7de;
+  border-radius: 9px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: #f9fafb;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#profile-host {
+  width: 100%;
+  padding: 10px;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
 }
