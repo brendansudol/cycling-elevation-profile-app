@@ -20,7 +20,7 @@ export const CONFIG: Config = {
     zOffsetKm: 0,
   },
   platform: {
-    heightM: 100,
+    pixelHeight: 30, // pixels
     fill: "var(--platform)",
     wallFill: "var(--platform-wall)",
   },

@@ -31,7 +31,8 @@ export interface RoofConfig {
 }
 
 export interface PlatformConfig {
-  heightM: number
+  /** Fixed shelf height in pixels (screen-space), independent of verticalExaggeration. */
+  pixelHeight: number
   fill: string
   wallFill: string
 }
