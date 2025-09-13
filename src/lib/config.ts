@@ -13,7 +13,7 @@ export const CONFIG: Config = {
     pitchDeg: 30,
     rollDeg: 0,
     xScale: 1.0,
-    verticalExaggeration: 9,
+    verticalExaggeration: 9.0,
   },
 
   // Ribbon depth (10% of distance by default; override with fixed km if needed)
