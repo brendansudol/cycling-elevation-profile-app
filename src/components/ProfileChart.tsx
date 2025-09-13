@@ -6,7 +6,12 @@ import { accumulate, avgGrade, niceStep, toFixedN, unitVec } from "@/lib/utils/m
 import { colorForGrade } from "@/lib/utils/color"
 import { fitAxonBoundingRangeCentered } from "@/lib/utils/projection"
 
-/** Pure SVG renderer for the axonometric elevation profile. */
+/**
+ * Axonometric elevation profile (pure SVG).
+ * This version uses a fixed-pixel shelf (platform.heightPx) and keeps the
+ * overall graphic perfectly centered by subtracting ½·shelfVec from the
+ * projector translation.
+ */
 export default function ProfileChart({
   data,
   config,
@@ -20,7 +25,7 @@ export default function ProfileChart({
 
   // Derived geometry (memoized)
   const model = useMemo(() => {
-    const { canvas, axon, roof, platform, grid } = config
+    const { canvas, axon, roof, platform } = config
     const segments = data.segments || []
     const { points, totalKm, totalGainM } = accumulate(segments)
 
@@ -28,10 +33,11 @@ export default function ProfileChart({
     const elevMax = Math.max(...points.map((p) => p.elev))
     const elevSpanM = Math.max(10, elevMax - elevMin)
 
-    const Ybuf = Math.max(0, platform.heightM || 0) / 1000 // km
-    const W = Math.max(0.001, totalKm)
-    const H = elevSpanM / 1000
+    // World extents (NO shelf in world space)
+    const W = Math.max(0.001, totalKm) // km (X world)
+    const H = elevSpanM / 1000 // km (Y world)
 
+    // Ribbon thickness from fraction or fixed override
     const Dbase = Math.max(0.01, roof.depthOverrideKm ?? W * roof.depthFrac)
     let zNear: number
     switch (roof.anchor) {
@@ -46,27 +52,50 @@ export default function ProfileChart({
     }
     const zFar = zNear + Dbase
 
+    // Reserve the shelf pixels in fit so nothing clips after we lift the face by shelfVec
+    const fitHeight = canvas.height - (platform.heightPx || 0)
+
+    // Build projector that fits the world box (no shelf) into fitHeight and centers it.
     const proj = fitAxonBoundingRangeCentered(
       W,
-      H + Ybuf,
+      H,
       Math.min(zNear, zFar),
       Math.max(zNear, zFar),
       canvas.width,
-      canvas.height,
+      fitHeight,
       canvas.margin,
       axon
     )
-    const P = (X: number, Y: number, Z: number) => proj.project(X, Y, Z)
 
+    // We'll compute shelfVec in screen-space as: direction of +Y (world) mapped through projector,
+    // normalized and scaled to exactly platform.heightPx.
+    const P0 = (X: number, Y: number, Z: number) => proj.project(X, Y, Z)
+
+    const pY0 = P0(0, 0, 0)
+    const pY1 = P0(0, 1, 0)
+    const ydx = pY1.x - pY0.x,
+      ydy = pY1.y - pY0.y
+    const ylen = Math.hypot(ydx, ydy) || 1
+    const shelfVec = {
+      x: (ydx / ylen) * (platform.heightPx || 0),
+      y: (ydy / ylen) * (platform.heightPx || 0),
+    }
+
+    // Center the overall graphic (world + shelf) by subtracting ½·shelfVec
+    const P = (X: number, Y: number, Z: number) => {
+      const p = P0(X, Y, Z)
+      return { x: p.x - shelfVec.x / 2, y: p.y - shelfVec.y / 2 }
+    }
+
+    // Data in world units (relative elevation)
     const worldPts = points.map((p) => ({ X: p.d, Y: (p.elev - elevMin) / 1000 }))
 
     return {
       canvas,
-      grid,
+      roof,
       platform,
       W,
       H,
-      Ybuf,
       zNear,
       zFar,
       segments,
@@ -75,16 +104,15 @@ export default function ProfileChart({
       totalGainM,
       elevSpanM,
       P,
+      shelfVec,
     }
   }, [data, config])
 
   const {
     canvas,
-    grid,
     platform,
     W,
     H,
-    Ybuf,
     zNear,
     zFar,
     segments,
@@ -93,11 +121,21 @@ export default function ProfileChart({
     totalGainM,
     elevSpanM,
     P,
+    shelfVec,
   } = model
 
-  const baseL = P(0, Ybuf, 0),
-    baseR = P(W, Ybuf, 0)
-  const topPts2D = worldPts.map((pt) => P(pt.X, Ybuf + pt.Y, 0))
+  // Small helpers
+  const addShelf = (p: { x: number; y: number }) => ({ x: p.x + shelfVec.x, y: p.y + shelfVec.y })
+
+  // Base axis (Y=0) projected (already centered by -½·shelfVec)
+  const baseAxisL = P(0, 0, 0),
+    baseAxisR = P(W, 0, 0)
+
+  // Face top follows the terrain and is lifted by shelfVec
+  const baseL = addShelf(baseAxisL)
+  const baseR = addShelf(baseAxisR)
+  const topPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, 0)))
+
   const facePathD = [
     `M ${baseL.x} ${baseL.y}`,
     ...topPts2D.map((q) => `L ${q.x} ${q.y}`),
@@ -105,12 +143,14 @@ export default function ProfileChart({
     `Z`,
   ].join(" ")
 
-  const distStep = grid.distStepKm || 1
-  const stepM = niceStep(elevSpanM, grid.elevLines)
+  // Grid steps
+  const distStep = config.grid.distStepKm || 1
+  const stepM = niceStep(elevSpanM, config.grid.elevLines)
   const stepYkm = stepM / 1000
 
-  const nearPts2D = worldPts.map((pt) => P(pt.X, Ybuf + pt.Y, zNear))
-  const farPts2D = worldPts.map((pt) => P(pt.X, Ybuf + pt.Y, zFar))
+  // Roof near/far profiles (also lifted by shelfVec)
+  const nearPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, zNear)))
+  const farPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, zFar)))
   const midPts = nearPts2D
     .map((f, i) => {
       const b = farPts2D[i]
@@ -118,8 +158,9 @@ export default function ProfileChart({
     })
     .join(" ")
 
-  const axisL = P(0, 0, 0),
-    axisR = P(W, 0, 0)
+  // Axes helpers (distance axis remains on Y=0, i.e., *below* the shelf)
+  const axisL = baseAxisL,
+    axisR = baseAxisR
   const tVec = unitVec(axisL, axisR)
   const nVec = { x: -tVec.y, y: tVec.x }
 
@@ -135,28 +176,36 @@ export default function ProfileChart({
       height={canvas.height}
       role="img"
     >
-      {/* PLATFORM / SHELF (z = 0 plane) */}
-      {Ybuf > 0 && (
+      {/* PLATFORM / SHELF — fixed pixel height (screen-space) */}
+      {platform.heightPx > 0 && (
         <>
-          <path
-            d={`M ${P(0, 0, 0).x} ${P(0, 0, 0).y}
-                L ${P(0, Ybuf, 0).x} ${P(0, Ybuf, 0).y}
-                L ${P(W, Ybuf, 0).x} ${P(W, Ybuf, 0).y}
-                L ${P(W, 0, 0).x} ${P(W, 0, 0).y} Z`}
-            fill={platform.fill}
-          />
-          {/* Vertical start wall at x=0 extruded zNear..zFar */}
-          <polygon
-            points={`${P(0, 0, zNear).x},${P(0, 0, zNear).y}
-                     ${P(0, 0, zFar).x},${P(0, 0, zFar).y}
-                     ${P(0, Ybuf, zFar).x},${P(0, Ybuf, zFar).y}
-                     ${P(0, Ybuf, zNear).x},${P(0, Ybuf, zNear).y}`}
-            fill={platform.wallFill}
-          />
+          {(() => {
+            const p00 = P(0, 0, 0)
+            const p10 = P(W, 0, 0) // bottom (x-axis)
+            const p01 = addShelf(p00)
+            const p11 = addShelf(p10) // top (shelf top)
+
+            return (
+              <>
+                <path
+                  d={`M ${p00.x} ${p00.y} L ${p01.x} ${p01.y} L ${p11.x} ${p11.y} L ${p10.x} ${p10.y} Z`}
+                  fill={platform.fill}
+                />
+                {/* Vertical start wall at x=0 extruded along z and lifted by shelfVec */}
+                <polygon
+                  points={`${P(0, 0, zNear).x},${P(0, 0, zNear).y}
+                           ${P(0, 0, zFar).x},${P(0, 0, zFar).y}
+                           ${addShelf(P(0, 0, zFar)).x},${addShelf(P(0, 0, zFar)).y}
+                           ${addShelf(P(0, 0, zNear)).x},${addShelf(P(0, 0, zNear)).y}`}
+                  fill={platform.wallFill}
+                />
+              </>
+            )
+          })()}
         </>
       )}
 
-      {/* FRONT FACE (yellow wedge) in z=0 plane */}
+      {/* FRONT FACE (yellow wedge) in z=0 plane (lifted by shelfVec) */}
       <defs>
         <clipPath id={clipId}>
           <path d={facePathD} />
@@ -169,13 +218,14 @@ export default function ProfileChart({
         strokeWidth={config.face.strokeWidth}
       />
 
-      {/* GRID (clipped to face) */}
+      {/* GRID (clipped to face). Lines are lifted by shelfVec. */}
       <g clipPath={`url(#${clipId})`}>
         {/* Distance grid lines */}
         {Array.from({ length: Math.floor(W / distStep) + 2 }, (_, i) => {
           const xk = Math.min(W, i * distStep)
-          const p1 = P(xk, 0, 0),
-            p2 = P(xk, H + Ybuf, 0)
+          const p1 = addShelf(P(xk, 0, 0))
+          const p2 = addShelf(P(xk, H, 0))
+
           return (
             <line
               key={`gx-${i}`}
@@ -191,9 +241,10 @@ export default function ProfileChart({
         })}
         {/* Elevation grid lines (from shelf top) */}
         {Array.from({ length: Math.floor(H / stepYkm) + 2 }, (_, i) => {
-          const yk = Ybuf + i * stepYkm
-          const p1 = P(0, yk, 0),
-            p2 = P(W, yk, 0)
+          const yk = i * stepYkm
+          const p1 = addShelf(P(0, yk, 0))
+          const p2 = addShelf(P(W, yk, 0))
+
           return (
             <line
               key={`gy-${i}`}
@@ -209,7 +260,7 @@ export default function ProfileChart({
         })}
       </g>
 
-      {/* ROOF / RIBBON tiles + dashed centerline */}
+      {/* ROOF / RIBBON tiles + dashed centerline (lifted by shelfVec) */}
       <g>
         {worldPts.slice(0, -1).map((_, i) => {
           const a = nearPts2D[i],
@@ -237,13 +288,15 @@ export default function ProfileChart({
         />
       </g>
 
-      {/* AXES (z=0 plane) */}
+      {/* AXES (z=0 plane).
+          Distance axis stays at Y=0 (below shelf), elevation axis is lifted by shelfVec. */}
       <g fontSize={config.labelFontSize} fontFamily="system-ui, sans-serif" fill="#374151">
         {/* distance axis */}
         <line x1={axisL.x} y1={axisL.y} x2={axisR.x} y2={axisR.y} stroke="#111827" />
-        {Array.from({ length: Math.floor(W / distStep) + 1 }, (_, i) => {
-          const xk = Math.min(W, i * distStep)
+        {Array.from({ length: Math.floor(W / (config.grid.distStepKm || 1)) + 1 }, (_, i) => {
+          const xk = Math.min(W, i * (config.grid.distStepKm || 1))
           const p = P(xk, 0, 0)
+
           return (
             <g key={`dx-${i}`}>
               <line
@@ -268,10 +321,10 @@ export default function ProfileChart({
           Distance (km)
         </text>
 
-        {/* elevation axis at X=W */}
+        {/* elevation axis at X=W (lifted by shelfVec) */}
         {(() => {
-          const yA = P(W, 0, 0),
-            yB = P(W, H + Ybuf, 0)
+          const yA = addShelf(P(W, 0, 0)),
+            yB = addShelf(P(W, H, 0))
           const yT = unitVec(yA, yB),
             yN = { x: -yT.y, y: yT.x }
           const step = stepM
@@ -279,8 +332,8 @@ export default function ProfileChart({
             <line key="e-line" x1={yA.x} y1={yA.y} x2={yB.x} y2={yB.y} stroke="#111827" />,
           ]
           for (let m = 0; m <= elevSpanM + 1e-6; m += step) {
-            const yk = Ybuf + m / 1000
-            const p = P(W, yk, 0)
+            const yk = m / 1000
+            const p = addShelf(P(W, yk, 0))
             lines.push(
               <g key={`ey-${m}`}>
                 <line x1={p.x} y1={p.y} x2={p.x + yN.x * 6} y2={p.y + yN.y * 6} stroke="#111827" />

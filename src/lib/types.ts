@@ -2,6 +2,7 @@ export interface Segment {
   km: number
   grade: number
 }
+
 export interface ClimbData {
   name: string
   segments: Segment[]
@@ -31,7 +32,8 @@ export interface RoofConfig {
 }
 
 export interface PlatformConfig {
-  heightM: number
+  /** Fixed pixel height for the shelf (screen-space). */
+  heightPx: number
   fill: string
   wallFill: string
 }
