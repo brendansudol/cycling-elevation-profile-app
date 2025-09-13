@@ -116,10 +116,30 @@ export default function ProfileChart({
   const topPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, 0)))
   const facePathD = facePath(baseL, topPts2D, baseR)
 
-  // Grid steps
-  const distStep = config.grid.distStepKm || 1
-  const stepM = niceStep(elevSpanM, config.grid.elevLines)
-  const stepYkm = stepM / 1000
+  // Units and grid steps
+  const isImperial = config.units === "imperial"
+  const KM_PER_MI = 1.609344
+  const FT_PER_M = 3.28084
+  const FT_PER_KM = FT_PER_M * 1000
+
+  // Distance grid step: provided in user units → convert to world km for spacing
+  const distStepLabel = Math.max(1e-6, config.grid.distStep || 1)
+  const distStepWorldKm = isImperial ? distStepLabel * KM_PER_MI : distStepLabel
+
+  // Elevation grid step: choose a nice step in label units, then convert to world km
+  let stepYkm = 0
+  let stepYLabel = 0
+  if (isImperial) {
+    const elevSpanFt = elevSpanM * FT_PER_M
+    const stepFt = niceStep(elevSpanFt, config.grid.elevLines)
+    stepYLabel = stepFt // label in feet
+    stepYkm = stepFt / FT_PER_KM // world km spacing
+  } else {
+    const elevSpanKm = H // already in km
+    const stepKm = niceStep(elevSpanKm, config.grid.elevLines)
+    stepYLabel = stepKm // label in km
+    stepYkm = stepKm // world km spacing
+  }
 
   // Roof near/far profiles (both lifted by the shelf)
   const nearPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, zNear)))
@@ -192,8 +212,8 @@ export default function ProfileChart({
       {/* ── GRID (clipped to face). Lines are lifted by the shelf ── */}
       <g clipPath={`url(#${clipId})`}>
         {/* Distance grid lines */}
-        {Array.from({ length: Math.floor(W / distStep) + 2 }, (_, i) => {
-          const xk = Math.min(W, i * distStep)
+        {Array.from({ length: Math.floor(W / distStepWorldKm) + 2 }, (_, i) => {
+          const xk = Math.min(W, i * distStepWorldKm)
           const p1 = addShelf(P(xk, 0, 0))
           const p2 = addShelf(P(xk, H, 0))
           return (
@@ -267,8 +287,8 @@ export default function ProfileChart({
           y2={baseAxisR.y}
           stroke="#111827"
         />
-        {Array.from({ length: Math.floor(W / (config.grid.distStepKm || 1)) + 1 }, (_, i) => {
-          const xk = Math.min(W, i * (config.grid.distStepKm || 1))
+        {Array.from({ length: Math.floor(W / distStepWorldKm) + 1 }, (_, i) => {
+          const xk = Math.min(W, i * distStepWorldKm)
           const p = P(xk, 0, 0)
           return (
             <g key={`dx-${i}`}>
@@ -280,7 +300,10 @@ export default function ProfileChart({
                 stroke="#111827"
               />
               <text x={p.x + nVec.x * 18} y={p.y + nVec.y * 18} textAnchor="middle">
-                {xk % 1 === 0 ? xk : toFixedN(xk, 1)}
+                {(() => {
+                  const labelVal = i * distStepLabel
+                  return labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)
+                })()}
               </text>
             </g>
           )
@@ -291,7 +314,7 @@ export default function ProfileChart({
           fill="#6b7280"
           textAnchor="middle"
         >
-          Distance (km)
+          {`Distance (${isImperial ? "mi" : "km"})`}
         </text>
 
         {/* elevation axis at X=W (lifted by shelf) */}
@@ -300,21 +323,28 @@ export default function ProfileChart({
           const yB = addShelf(P(W, H, 0))
           const yT = unitVec(yA, yB)
           const yN = { x: -yT.y, y: yT.x }
-          const step = stepM
           const lines: React.ReactNode[] = [
             <line key="e-line" x1={yA.x} y1={yA.y} x2={yB.x} y2={yB.y} stroke="#111827" />,
           ]
-          for (let m = 0; m <= elevSpanM + 1e-6; m += step) {
-            const yk = m / 1000
-            const p = addShelf(P(W, yk, 0))
-            lines.push(
-              <g key={`ey-${m}`}>
-                <line x1={p.x} y1={p.y} x2={p.x + yN.x * 6} y2={p.y + yN.y * 6} stroke="#111827" />
-                <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
-                  {m | 0} m
-                </text>
-              </g>
-            )
+          {
+            const maxTicks = Math.floor(H / stepYkm + 1e-6) + 1
+            for (let i = 0; i <= maxTicks; i++) {
+              const yk = i * stepYkm
+              if (yk > H + 1e-6) break
+              const p = addShelf(P(W, yk, 0))
+              const labelVal = i * stepYLabel
+              const labelStr = isImperial
+                ? `${Math.round(labelVal)} ft`
+                : `${labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)} km`
+              lines.push(
+                <g key={`ey-${i}`}>
+                  <line x1={p.x} y1={p.y} x2={p.x + yN.x * 6} y2={p.y + yN.y * 6} stroke="#111827" />
+                  <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
+                    {labelStr}
+                  </text>
+                </g>
+              )
+            }
           }
           return lines
         })()}
@@ -325,9 +355,18 @@ export default function ProfileChart({
         <text x={centerX} y={34} fontSize={config.titleFontSize} fontWeight={800} fill="#111827">
           {data.name || "Climb"}
         </text>
-        <text x={centerX} y={60} fill="#6b7280">
-          {`${toFixedN(totalKm, 1)} km • ${totalGainM} m gain • ${toFixedN(avg, 1)}% avg`}
-        </text>
+        {(() => {
+          const isImperial = config.units === "imperial"
+          const KM_PER_MI = 1.609344
+          const FT_PER_M = 3.28084
+          const distVal = isImperial ? totalKm / KM_PER_MI : totalKm
+          const distStr = `${toFixedN(distVal, 1)} ${isImperial ? "mi" : "km"}`
+          const gainVal = isImperial ? Math.round(totalGainM * FT_PER_M) : toFixedN(totalGainM / 1000, 1)
+          const gainStr = `${gainVal} ${isImperial ? "ft" : "km"} gain`
+          return (
+            <text x={centerX} y={60} fill="#6b7280">{`${distStr} • ${gainStr} • ${toFixedN(avg, 1)}% avg`}</text>
+          )
+        })()}
       </g>
     </svg>
   )

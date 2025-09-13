@@ -39,7 +39,12 @@ export interface PlatformConfig {
 }
 
 export interface GridConfig {
-  distStepKm: number
+  /**
+   * Grid step for distance axis in user units.
+   * - metric: kilometers
+   * - imperial: miles
+   */
+  distStep: number
   elevLines: number
 }
 
@@ -69,4 +74,6 @@ export interface Config {
   titleFontSize: number
   labelFontSize: number
   slopeColors: SlopeColor[]
+  /** Units used for labels and axis steps. */
+  units: "metric" | "imperial"
 }

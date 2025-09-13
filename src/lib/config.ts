@@ -1,6 +1,7 @@
 import { Config } from "./types"
 
 export const CONFIG: Config = {
+  units: "metric",
   canvas: {
     width: 1180,
     height: 720,
@@ -31,7 +32,7 @@ export const CONFIG: Config = {
     wallFill: "var(--platform-wall)",
   },
 
-  grid: { distStepKm: 1, elevLines: 8 },
+  grid: { distStep: 1, elevLines: 8 },
   road: { strokeWidth: 2.4, dash: "10 10" },
   face: { stroke: "#9aa1aa", strokeWidth: 1.25 },
   titleFontSize: 26,
