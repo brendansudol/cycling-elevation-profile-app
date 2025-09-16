@@ -103,6 +103,7 @@ export default function ProfileChart({
       totalKm,
       totalGainM,
       elevSpanM,
+      elevMin,
       P,
       shelfVec,
     }
@@ -120,6 +121,7 @@ export default function ProfileChart({
     totalKm,
     totalGainM,
     elevSpanM,
+    elevMin,
     P,
     shelfVec,
   } = model
@@ -147,6 +149,8 @@ export default function ProfileChart({
   const distStep = config.grid.distStepKm || 1
   const stepM = niceStep(elevSpanM, config.grid.elevLines)
   const stepYkm = stepM / 1000
+
+  const axisMinM = (data.startElevationM ?? 0) + elevMin
 
   // Roof near/far profiles (also lifted by shelfVec)
   const nearPts2D = worldPts.map((pt) => addShelf(P(pt.X, pt.Y, zNear)))
@@ -338,7 +342,7 @@ export default function ProfileChart({
               <g key={`ey-${m}`}>
                 <line x1={p.x} y1={p.y} x2={p.x + yN.x * 6} y2={p.y + yN.y * 6} stroke="#111827" />
                 <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
-                  {m | 0} m
+                  {Math.round(axisMinM + m)} m
                 </text>
               </g>
             )

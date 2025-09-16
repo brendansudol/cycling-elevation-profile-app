@@ -2,6 +2,7 @@ import { ClimbData } from "./types"
 
 export const SAMPLE: ClimbData = {
   name: "Grand Colombier",
+  startElevationM: 0,
   segments: [
     { km: 1.0, grade: 5.8 },
     { km: 1.0, grade: 7.4 },

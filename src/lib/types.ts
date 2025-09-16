@@ -6,6 +6,8 @@ export interface Segment {
 export interface ClimbData {
   name: string
   segments: Segment[]
+  /** Starting elevation in meters above sea level */
+  startElevationM?: number
 }
 
 export interface CanvasConfig {
