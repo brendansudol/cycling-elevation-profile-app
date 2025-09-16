@@ -169,6 +169,8 @@ export default function ProfileChart({
       width={canvas.width}
       height={canvas.height}
       role="img"
+      preserveAspectRatio="xMidYMid meet"
+      style={{ display: "block", maxWidth: "100%", height: "auto" }}
     >
       {/* ── PLATFORM / SHELF (fixed pixel height in screen space) ── */}
       {platform.heightPx > 0 && (
