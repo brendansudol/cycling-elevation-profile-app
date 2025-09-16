@@ -36,13 +36,22 @@ The chart expects a simple profile made of sequential segments with length and a
 
 ```ts
 // src/lib/types.ts
-export interface Segment { km: number; grade: number }
-export interface ClimbData { name: string; segments: Segment[] }
+export interface Segment {
+  km: number
+  grade: number
+}
+
+export interface ClimbData {
+  name: string
+  segments: Segment[]
+  // Optional absolute starting elevation in meters.
+  // If provided, the elevation-axis labels are offset from this value.
+  // If omitted, the elevation-axis labels start at 0 (current relative behavior).
+  startElevM?: number
+}
 ```
 
 Sample data lives in `src/lib/data.ts` and is used on the homepage by default.
-
-There is also a utility to parse climb data from a `?data=` URL parameter (JSON or base64‑encoded JSON): `parseDataParam(raw?: string)`. It’s not wired into the default page, but is available if you want to support shareable URLs.
 
 ## Configuration
 

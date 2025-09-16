@@ -2,6 +2,8 @@ import { ClimbData } from "./types"
 
 export const SAMPLE: ClimbData = {
   name: "Grand Colombier",
+  // Optional starting elevation in meters (absolute). Comment out to see relative axis (0-based).
+  startElevM: 430,
   segments: [
     { km: 1.0, grade: 5.8 },
     { km: 1.0, grade: 7.4 },

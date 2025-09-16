@@ -78,6 +78,7 @@ export default function ProfileChart({
       totalKm,
       totalGainM,
       elevSpanM,
+      elevMin,
       W,
       H,
       zNear,
@@ -95,6 +96,7 @@ export default function ProfileChart({
     totalKm,
     totalGainM,
     elevSpanM,
+    elevMin,
     W,
     H,
     zNear,
@@ -328,17 +330,34 @@ export default function ProfileChart({
           ]
           {
             const maxTicks = Math.floor(H / stepYkm + 1e-6) + 1
+
+            // If a starting elevation (absolute, meters) is provided, offset labels from it.
+            // Bottom of the world (Y=0) corresponds to the relative min elevation (elevMin).
+            // So the absolute elevation at Y=0 is: startElevM + elevMin. If no start provided, use 0 (current behavior).
+            const startElevM = data.startElevM
+            const baseAbsLabel = (() => {
+              if (startElevM == null) return 0
+              const absAtBottomM = startElevM + elevMin // meters
+              return isImperial ? absAtBottomM * FT_PER_M : absAtBottomM / 1000
+            })()
+
             for (let i = 0; i <= maxTicks; i++) {
               const yk = i * stepYkm
               if (yk > H + 1e-6) break
               const p = addShelf(P(W, yk, 0))
-              const labelVal = i * stepYLabel
+              const labelVal = baseAbsLabel + i * stepYLabel
               const labelStr = isImperial
                 ? `${Math.round(labelVal)} ft`
                 : `${labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)} km`
               lines.push(
                 <g key={`ey-${i}`}>
-                  <line x1={p.x} y1={p.y} x2={p.x + yN.x * 6} y2={p.y + yN.y * 6} stroke="#111827" />
+                  <line
+                    x1={p.x}
+                    y1={p.y}
+                    x2={p.x + yN.x * 6}
+                    y2={p.y + yN.y * 6}
+                    stroke="#111827"
+                  />
                   <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
                     {labelStr}
                   </text>
@@ -361,10 +380,15 @@ export default function ProfileChart({
           const FT_PER_M = 3.28084
           const distVal = isImperial ? totalKm / KM_PER_MI : totalKm
           const distStr = `${toFixedN(distVal, 1)} ${isImperial ? "mi" : "km"}`
-          const gainVal = isImperial ? Math.round(totalGainM * FT_PER_M) : toFixedN(totalGainM / 1000, 1)
+          const gainVal = isImperial
+            ? Math.round(totalGainM * FT_PER_M)
+            : toFixedN(totalGainM / 1000, 1)
           const gainStr = `${gainVal} ${isImperial ? "ft" : "km"} gain`
           return (
-            <text x={centerX} y={60} fill="#6b7280">{`${distStr} • ${gainStr} • ${toFixedN(avg, 1)}% avg`}</text>
+            <text x={centerX} y={60} fill="#6b7280">{`${distStr} • ${gainStr} • ${toFixedN(
+              avg,
+              1
+            )}% avg`}</text>
           )
         })()}
       </g>

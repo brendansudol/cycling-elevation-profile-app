@@ -6,6 +6,7 @@ export interface Segment {
 export interface ClimbData {
   name: string
   segments: Segment[]
+  startElevM?: number // absolute starting elevation in meters
 }
 
 export interface CanvasConfig {
@@ -32,8 +33,7 @@ export interface RoofConfig {
 }
 
 export interface PlatformConfig {
-  /** Fixed pixel height for the shelf (screen-space). */
-  heightPx: number
+  heightPx: number // Fixed pixel height for the shelf (screen-space).
   fill: string
   wallFill: string
 }
@@ -74,6 +74,5 @@ export interface Config {
   titleFontSize: number
   labelFontSize: number
   slopeColors: SlopeColor[]
-  /** Units used for labels and axis steps. */
-  units: "metric" | "imperial"
+  units: "metric" | "imperial" // Units used for labels and axis steps.
 }
