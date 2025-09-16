@@ -157,6 +157,39 @@ export default function ProfileChart({
   const avg = avgGrade(segments)
   const centerX = canvas.width / 2
   const gradeLabelFontSize = Math.max(1, config.labelFontSize * 0.85)
+  const legendItems = useMemo(() => {
+    const buckets = config.slopeColors || []
+    if (buckets.length === 0) return []
+
+    const formatBound = (value: number) => {
+      if (!Number.isFinite(value)) return "∞"
+      const sanitized = Math.abs(value) < 1e-6 ? 0 : value
+      const rounded = Math.round(sanitized)
+      return Math.abs(rounded - sanitized) < 1e-6
+        ? `${rounded}`
+        : `${toFixedN(sanitized, 1)}`
+    }
+
+    const items: { color: string; label: string }[] = []
+    let previousUpper: number | null = null
+
+    for (const bucket of buckets) {
+      const lowerBound = previousUpper ?? Math.min(0, bucket.upTo)
+      const safeLower = Number.isFinite(lowerBound) ? lowerBound : 0
+      const label = Number.isFinite(bucket.upTo)
+        ? `${formatBound(safeLower)}-${formatBound(bucket.upTo)}%`
+        : `${formatBound(safeLower)}%+`
+      items.push({ color: bucket.color, label })
+      previousUpper = bucket.upTo
+    }
+
+    return items
+  }, [config.slopeColors])
+  const legendX = canvas.width - canvas.margin.right + 24
+  const legendY = canvas.margin.top
+  const legendSwatchSize = 16
+  const legendTitleGap = 20
+  const legendLineHeight = legendSwatchSize + 8
 
   // ────────────────────────────────────────────────────────────────────────────────
   // Render
@@ -405,6 +438,43 @@ export default function ProfileChart({
           return lines
         })()}
       </g>
+
+      {/* ── Grade legend ── */}
+      {legendItems.length > 0 && (
+        <g
+          transform={`translate(${legendX}, ${legendY})`}
+          fontFamily="system-ui, sans-serif"
+          fontSize={config.labelFontSize}
+        >
+          <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
+            Grade
+          </text>
+          {legendItems.map((item, idx) => {
+            const itemY = legendTitleGap + idx * legendLineHeight
+            return (
+              <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
+                <rect
+                  width={legendSwatchSize}
+                  height={legendSwatchSize}
+                  fill={item.color}
+                  stroke="#111827"
+                  strokeWidth={0.6}
+                  rx={3}
+                  ry={3}
+                />
+                <text
+                  x={legendSwatchSize + 10}
+                  y={legendSwatchSize / 2}
+                  fill="#111827"
+                  dominantBaseline="middle"
+                >
+                  {item.label}
+                </text>
+              </g>
+            )
+          })}
+        </g>
+      )}
 
       {/* ── Title ── */}
       <g fontFamily="system-ui, sans-serif" textAnchor="middle">
