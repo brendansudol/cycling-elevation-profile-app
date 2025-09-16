@@ -20,7 +20,7 @@ function axonProject(X: number, Y: number, Z: number, params: AxonParams) {
   const sp = Math.sin(DEG(params.pitchDeg))
   const x2 = x1
   const y2 = cp * y1 - sp * z1
-  const z2 = sp * y1 + cp * z1
+  // Orthographic roll ignores the updated Z component (sp * y1 + cp * z1).
 
   // Rz(roll)
   const cr = Math.cos(DEG(params.rollDeg))
