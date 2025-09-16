@@ -107,6 +107,7 @@ export default function ProfileChart({
 
   // Convenience helpers bound to current shelf
   const addShelf = (p: Pt) => addVec(p, shelfVec)
+  const shelfLength = Math.hypot(shelfVec.x, shelfVec.y)
 
   // Base axis (Y=0) projected (already centered via the P() half-shelf shift)
   const baseAxisL = P(0, 0, 0)
@@ -155,6 +156,7 @@ export default function ProfileChart({
   // Title stats
   const avg = avgGrade(segments)
   const centerX = canvas.width / 2
+  const gradeLabelFontSize = Math.max(1, config.labelFontSize * 0.85)
 
   // ────────────────────────────────────────────────────────────────────────────────
   // Render
@@ -289,6 +291,39 @@ export default function ProfileChart({
           y2={baseAxisR.y}
           stroke="#111827"
         />
+        {segments.map((segment, i) => {
+          const start = worldPts[i]
+          const end = worldPts[i + 1]
+          if (!start || !end) return null
+          if ((segment?.km || 0) <= 0) return null
+
+          const midX = (start.X + end.X) / 2
+          const basePoint = P(midX, 0, 0)
+          const shelfFraction = 0.68
+          const offset =
+            shelfLength > 1e-6
+              ? { x: shelfVec.x * shelfFraction, y: shelfVec.y * shelfFraction }
+              : { x: nVec.x * 18, y: nVec.y * 18 }
+          const pos = { x: basePoint.x + offset.x, y: basePoint.y + offset.y }
+
+          const grade = segment.grade ?? 0
+          const gradeValue = Number.isFinite(grade) ? Math.round(grade) : 0
+
+          return (
+            <text
+              key={`grade-${i}`}
+              x={pos.x}
+              y={pos.y}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fontWeight={600}
+              fontSize={gradeLabelFontSize}
+              fill="#111827"
+            >
+              {`${gradeValue}%`}
+            </text>
+          )
+        })}
         {Array.from({ length: Math.floor(W / distStepWorldKm) + 1 }, (_, i) => {
           const xk = Math.min(W, i * distStepWorldKm)
           const p = P(xk, 0, 0)
