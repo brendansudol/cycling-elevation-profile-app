@@ -5,7 +5,7 @@ export const CONFIG: Config = {
   canvas: {
     width: 1180,
     height: 720,
-    margin: { top: 90, right: 170, bottom: 90, left: 60 },
+    margin: { top: 40, right: 170, bottom: 90, left: 60 },
   },
 
   // Camera

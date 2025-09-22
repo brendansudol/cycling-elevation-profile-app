@@ -155,7 +155,6 @@ export default function ProfileChart({
 
   // Title stats
   const avg = avgGrade(segments)
-  const centerX = canvas.width / 2
   const gradeLabelFontSize = Math.max(1, config.labelFontSize * 0.85)
   const legendItems = useMemo(() => {
     const buckets = config.slopeColors || []
@@ -165,9 +164,7 @@ export default function ProfileChart({
       if (!Number.isFinite(value)) return "∞"
       const sanitized = Math.abs(value) < 1e-6 ? 0 : value
       const rounded = Math.round(sanitized)
-      return Math.abs(rounded - sanitized) < 1e-6
-        ? `${rounded}`
-        : `${toFixedN(sanitized, 1)}`
+      return Math.abs(rounded - sanitized) < 1e-6 ? `${rounded}` : `${toFixedN(sanitized, 1)}`
     }
 
     const items: { color: string; label: string }[] = []
@@ -195,292 +192,20 @@ export default function ProfileChart({
   // Render
   // ────────────────────────────────────────────────────────────────────────────────
   return (
-    <svg
-      ref={svgRef}
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox={`0 0 ${canvas.width} ${canvas.height}`}
-      width={canvas.width}
-      height={canvas.height}
-      role="img"
-      preserveAspectRatio="xMidYMid meet"
-      style={{ display: "block", maxWidth: "100%", height: "auto" }}
-    >
-      {/* ── PLATFORM / SHELF (fixed pixel height in screen space) ── */}
-      {platform.heightPx > 0 && (
-        <>
-          {(() => {
-            // bottom edge (distance axis at Y=0), top edge is bottom + shelfVec
-            const p00 = P(0, 0, 0)
-            const p10 = P(W, 0, 0)
-            const p01 = addShelf(p00)
-            const p11 = addShelf(p10)
-            return (
-              <>
-                {/* Shelf slab */}
-                <path
-                  d={`M ${p00.x} ${p00.y} L ${p01.x} ${p01.y} L ${p11.x} ${p11.y} L ${p10.x} ${p10.y} Z`}
-                  fill={platform.fill}
-                />
-                {/* Vertical start wall at x=0 extruded along z and lifted by the shelf */}
-                <polygon
-                  points={`${P(0, 0, zNear).x},${P(0, 0, zNear).y}
-                           ${P(0, 0, zFar).x},${P(0, 0, zFar).y}
-                           ${addShelf(P(0, 0, zFar)).x},${addShelf(P(0, 0, zFar)).y}
-                           ${addShelf(P(0, 0, zNear)).x},${addShelf(P(0, 0, zNear)).y}`}
-                  fill={platform.wallFill}
-                />
-              </>
-            )
-          })()}
-        </>
-      )}
-
-      {/* ── FRONT FACE (yellow wedge) at z=0, lifted by shelf ── */}
-      <defs>
-        <clipPath id={clipId}>
-          <path d={facePathD} />
-        </clipPath>
-      </defs>
-      <path
-        d={facePathD}
-        fill="var(--face-yellow)"
-        stroke={config.face.stroke}
-        strokeWidth={config.face.strokeWidth}
-      />
-
-      {/* ── GRID (clipped to face). Lines are lifted by the shelf ── */}
-      <g clipPath={`url(#${clipId})`}>
-        {/* Distance grid lines */}
-        {Array.from({ length: Math.floor(W / distStepWorldKm) + 2 }, (_, i) => {
-          const xk = Math.min(W, i * distStepWorldKm)
-          const p1 = addShelf(P(xk, 0, 0))
-          const p2 = addShelf(P(xk, H, 0))
-          return (
-            <line
-              key={`gx-${i}`}
-              x1={p1.x}
-              y1={p1.y}
-              x2={p2.x}
-              y2={p2.y}
-              stroke="var(--grid)"
-              strokeWidth={1}
-              strokeDasharray="4 8"
-            />
-          )
-        })}
-        {/* Elevation grid lines (from shelf top) */}
-        {Array.from({ length: Math.floor(H / stepYkm) + 2 }, (_, i) => {
-          const yk = i * stepYkm
-          const p1 = addShelf(P(0, yk, 0))
-          const p2 = addShelf(P(W, yk, 0))
-          return (
-            <line
-              key={`gy-${i}`}
-              x1={p1.x}
-              y1={p1.y}
-              x2={p2.x}
-              y2={p2.y}
-              stroke="var(--grid)"
-              strokeWidth={1}
-              strokeDasharray="8 8"
-            />
-          )
-        })}
-      </g>
-
-      {/* ── ROOF / RIBBON (tiles + dashed midline), lifted by the shelf ── */}
-      <g>
-        {worldPts.slice(0, -1).map((_, i) => {
-          const a = nearPts2D[i],
-            b = nearPts2D[i + 1]
-          const a2 = farPts2D[i],
-            b2 = farPts2D[i + 1]
-          const grade = segments[i]?.grade ?? 0
-          return (
-            <polygon
-              key={`tile-${i}`}
-              points={`${a.x},${a.y} ${b.x},${b.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
-              fill={colorForGrade(grade, config.slopeColors)}
-              stroke="var(--road-stroke)"
-              strokeWidth={0.9}
-            />
-          )
-        })}
-        <polyline
-          points={midPts}
-          fill="none"
-          stroke="var(--centerline)"
-          strokeWidth={config.road.strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={config.road.dash}
-        />
-      </g>
-
-      {/* ── AXES (distance at Y=0; elevation at X=W lifted by shelf) ── */}
-      <g fontSize={config.labelFontSize} fontFamily="system-ui, sans-serif" fill="#374151">
-        {/* distance axis */}
-        <line
-          x1={baseAxisL.x}
-          y1={baseAxisL.y}
-          x2={baseAxisR.x}
-          y2={baseAxisR.y}
-          stroke="#111827"
-        />
-        {segments.map((segment, i) => {
-          const start = worldPts[i]
-          const end = worldPts[i + 1]
-          if (!start || !end) return null
-          if ((segment?.km || 0) <= 0) return null
-
-          const midX = (start.X + end.X) / 2
-          const basePoint = P(midX, 0, 0)
-          const shelfFraction = 0.68
-          const offset =
-            shelfLength > 1e-6
-              ? { x: shelfVec.x * shelfFraction, y: shelfVec.y * shelfFraction }
-              : { x: nVec.x * 18, y: nVec.y * 18 }
-          const pos = { x: basePoint.x + offset.x, y: basePoint.y + offset.y }
-
-          const grade = segment.grade ?? 0
-          const gradeValue = Number.isFinite(grade) ? Math.round(grade) : 0
-
-          return (
-            <text
-              key={`grade-${i}`}
-              x={pos.x}
-              y={pos.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontWeight={600}
-              fontSize={gradeLabelFontSize}
-              fill="#111827"
-            >
-              {`${gradeValue}%`}
-            </text>
-          )
-        })}
-        {Array.from({ length: Math.floor(W / distStepWorldKm) + 1 }, (_, i) => {
-          const xk = Math.min(W, i * distStepWorldKm)
-          const p = P(xk, 0, 0)
-          return (
-            <g key={`dx-${i}`}>
-              <line
-                x1={p.x}
-                y1={p.y}
-                x2={p.x + nVec.x * 8}
-                y2={p.y + nVec.y * 8}
-                stroke="#111827"
-              />
-              <text x={p.x + nVec.x * 18} y={p.y + nVec.y * 18} textAnchor="middle">
-                {(() => {
-                  const labelVal = i * distStepLabel
-                  return labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)
-                })()}
-              </text>
-            </g>
-          )
-        })}
-        <text
-          x={(baseAxisL.x + baseAxisR.x) / 2 + nVec.x * 32}
-          y={(baseAxisL.y + baseAxisR.y) / 2 + nVec.y * 32}
-          fill="#6b7280"
-          textAnchor="middle"
+    <>
+      {/* Title and stats rendered outside SVG */}
+      <div style={{ textAlign: "center", marginBottom: 8 }}>
+        <div
+          style={{
+            fontFamily: "system-ui, sans-serif",
+            fontSize: config.titleFontSize,
+            fontWeight: 800,
+            color: "var(--ink)",
+            lineHeight: 1.1,
+          }}
         >
-          {`Distance (${isImperial ? "mi" : "km"})`}
-        </text>
-
-        {/* elevation axis at X=W (lifted by shelf) */}
-        {(() => {
-          const yA = addShelf(P(W, 0, 0))
-          const yB = addShelf(P(W, H, 0))
-          const yT = unitVec(yA, yB)
-          const yN = { x: -yT.y, y: yT.x }
-          const lines: React.ReactNode[] = [
-            <line key="e-line" x1={yA.x} y1={yA.y} x2={yB.x} y2={yB.y} stroke="#111827" />,
-          ]
-          {
-            const maxTicks = Math.floor(H / stepYkm + 1e-6) + 1
-
-            // If a starting elevation (absolute, meters) is provided, offset labels from it.
-            // Bottom of the world (Y=0) corresponds to the relative min elevation (elevMin).
-            // So the absolute elevation at Y=0 is: startElevM + elevMin. If no start provided, use 0 (current behavior).
-            const startElevM = data.startElevM
-            const baseAbsLabel = (() => {
-              if (startElevM == null) return 0
-              const absAtBottomM = startElevM + elevMin // meters
-              return isImperial ? absAtBottomM * FT_PER_M : absAtBottomM / 1000
-            })()
-
-            for (let i = 0; i <= maxTicks; i++) {
-              const yk = i * stepYkm
-              if (yk > H + 1e-6) break
-              const p = addShelf(P(W, yk, 0))
-              const labelVal = baseAbsLabel + i * stepYLabel
-              const labelStr = isImperial
-                ? `${Math.round(labelVal)} ft`
-                : `${labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)} km`
-              lines.push(
-                <g key={`ey-${i}`}>
-                  <line
-                    x1={p.x}
-                    y1={p.y}
-                    x2={p.x + yN.x * 6}
-                    y2={p.y + yN.y * 6}
-                    stroke="#111827"
-                  />
-                  <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
-                    {labelStr}
-                  </text>
-                </g>
-              )
-            }
-          }
-          return lines
-        })()}
-      </g>
-
-      {/* ── Grade legend ── */}
-      {legendItems.length > 0 && (
-        <g
-          transform={`translate(${legendX}, ${legendY})`}
-          fontFamily="system-ui, sans-serif"
-          fontSize={config.labelFontSize}
-        >
-          <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
-            Grade
-          </text>
-          {legendItems.map((item, idx) => {
-            const itemY = legendTitleGap + idx * legendLineHeight
-            return (
-              <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
-                <rect
-                  width={legendSwatchSize}
-                  height={legendSwatchSize}
-                  fill={item.color}
-                  stroke="#111827"
-                  strokeWidth={0.6}
-                  rx={3}
-                  ry={3}
-                />
-                <text
-                  x={legendSwatchSize + 10}
-                  y={legendSwatchSize / 2}
-                  fill="#111827"
-                  dominantBaseline="middle"
-                >
-                  {item.label}
-                </text>
-              </g>
-            )
-          })}
-        </g>
-      )}
-
-      {/* ── Title ── */}
-      <g fontFamily="system-ui, sans-serif" textAnchor="middle">
-        <text x={centerX} y={34} fontSize={config.titleFontSize} fontWeight={800} fill="#111827">
           {data.name || "Climb"}
-        </text>
+        </div>
         {(() => {
           const isImperial = config.units === "imperial"
           const KM_PER_MI = 1.609344
@@ -491,15 +216,296 @@ export default function ProfileChart({
             ? Math.round(totalGainM * FT_PER_M)
             : toFixedN(totalGainM / 1000, 1)
           const gainStr = `${gainVal} ${isImperial ? "ft" : "km"} gain`
+
           return (
-            <text x={centerX} y={60} fill="#6b7280">{`${distStr} • ${gainStr} • ${toFixedN(
-              avg,
-              1
-            )}% avg`}</text>
+            <div style={{ color: "var(--muted)", marginTop: 4 }}>
+              {`${distStr} • ${gainStr} • ${toFixedN(avg, 1)}% avg`}
+            </div>
           )
         })()}
-      </g>
-    </svg>
+      </div>
+      <svg
+        ref={svgRef}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox={`0 0 ${canvas.width} ${canvas.height}`}
+        width={canvas.width}
+        height={canvas.height}
+        role="img"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: "block", maxWidth: "100%", height: "auto" }}
+      >
+        {/* ── PLATFORM / SHELF (fixed pixel height in screen space) ── */}
+        {platform.heightPx > 0 && (
+          <>
+            {(() => {
+              // bottom edge (distance axis at Y=0), top edge is bottom + shelfVec
+              const p00 = P(0, 0, 0)
+              const p10 = P(W, 0, 0)
+              const p01 = addShelf(p00)
+              const p11 = addShelf(p10)
+              return (
+                <>
+                  {/* Shelf slab */}
+                  <path
+                    d={`M ${p00.x} ${p00.y} L ${p01.x} ${p01.y} L ${p11.x} ${p11.y} L ${p10.x} ${p10.y} Z`}
+                    fill={platform.fill}
+                  />
+                  {/* Vertical start wall at x=0 extruded along z and lifted by the shelf */}
+                  <polygon
+                    points={`${P(0, 0, zNear).x},${P(0, 0, zNear).y}
+                           ${P(0, 0, zFar).x},${P(0, 0, zFar).y}
+                           ${addShelf(P(0, 0, zFar)).x},${addShelf(P(0, 0, zFar)).y}
+                           ${addShelf(P(0, 0, zNear)).x},${addShelf(P(0, 0, zNear)).y}`}
+                    fill={platform.wallFill}
+                  />
+                </>
+              )
+            })()}
+          </>
+        )}
+
+        {/* ── FRONT FACE (yellow wedge) at z=0, lifted by shelf ── */}
+        <defs>
+          <clipPath id={clipId}>
+            <path d={facePathD} />
+          </clipPath>
+        </defs>
+        <path
+          d={facePathD}
+          fill="var(--face-yellow)"
+          stroke={config.face.stroke}
+          strokeWidth={config.face.strokeWidth}
+        />
+
+        {/* ── GRID (clipped to face). Lines are lifted by the shelf ── */}
+        <g clipPath={`url(#${clipId})`}>
+          {/* Distance grid lines */}
+          {Array.from({ length: Math.floor(W / distStepWorldKm) + 2 }, (_, i) => {
+            const xk = Math.min(W, i * distStepWorldKm)
+            const p1 = addShelf(P(xk, 0, 0))
+            const p2 = addShelf(P(xk, H, 0))
+            return (
+              <line
+                key={`gx-${i}`}
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke="var(--grid)"
+                strokeWidth={1}
+                strokeDasharray="4 8"
+              />
+            )
+          })}
+          {/* Elevation grid lines (from shelf top) */}
+          {Array.from({ length: Math.floor(H / stepYkm) + 2 }, (_, i) => {
+            const yk = i * stepYkm
+            const p1 = addShelf(P(0, yk, 0))
+            const p2 = addShelf(P(W, yk, 0))
+            return (
+              <line
+                key={`gy-${i}`}
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke="var(--grid)"
+                strokeWidth={1}
+                strokeDasharray="8 8"
+              />
+            )
+          })}
+        </g>
+
+        {/* ── ROOF / RIBBON (tiles + dashed midline), lifted by the shelf ── */}
+        <g>
+          {worldPts.slice(0, -1).map((_, i) => {
+            const a = nearPts2D[i],
+              b = nearPts2D[i + 1]
+            const a2 = farPts2D[i],
+              b2 = farPts2D[i + 1]
+            const grade = segments[i]?.grade ?? 0
+            return (
+              <polygon
+                key={`tile-${i}`}
+                points={`${a.x},${a.y} ${b.x},${b.y} ${b2.x},${b2.y} ${a2.x},${a2.y}`}
+                fill={colorForGrade(grade, config.slopeColors)}
+                stroke="var(--road-stroke)"
+                strokeWidth={0.9}
+              />
+            )
+          })}
+          <polyline
+            points={midPts}
+            fill="none"
+            stroke="var(--centerline)"
+            strokeWidth={config.road.strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={config.road.dash}
+          />
+        </g>
+
+        {/* ── AXES (distance at Y=0; elevation at X=W lifted by shelf) ── */}
+        <g fontSize={config.labelFontSize} fontFamily="system-ui, sans-serif" fill="#374151">
+          {/* distance axis */}
+          <line
+            x1={baseAxisL.x}
+            y1={baseAxisL.y}
+            x2={baseAxisR.x}
+            y2={baseAxisR.y}
+            stroke="#111827"
+          />
+          {segments.map((segment, i) => {
+            const start = worldPts[i]
+            const end = worldPts[i + 1]
+            if (!start || !end) return null
+            if ((segment?.km || 0) <= 0) return null
+
+            const midX = (start.X + end.X) / 2
+            const basePoint = P(midX, 0, 0)
+            const shelfFraction = 0.68
+            const offset =
+              shelfLength > 1e-6
+                ? { x: shelfVec.x * shelfFraction, y: shelfVec.y * shelfFraction }
+                : { x: nVec.x * 18, y: nVec.y * 18 }
+            const pos = { x: basePoint.x + offset.x, y: basePoint.y + offset.y }
+
+            const grade = segment.grade ?? 0
+            const gradeValue = Number.isFinite(grade) ? Math.round(grade) : 0
+
+            return (
+              <text
+                key={`grade-${i}`}
+                x={pos.x}
+                y={pos.y}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fontWeight={600}
+                fontSize={gradeLabelFontSize}
+                fill="#111827"
+              >
+                {`${gradeValue}%`}
+              </text>
+            )
+          })}
+          {Array.from({ length: Math.floor(W / distStepWorldKm) + 1 }, (_, i) => {
+            const xk = Math.min(W, i * distStepWorldKm)
+            const p = P(xk, 0, 0)
+            return (
+              <g key={`dx-${i}`}>
+                <line
+                  x1={p.x}
+                  y1={p.y}
+                  x2={p.x + nVec.x * 8}
+                  y2={p.y + nVec.y * 8}
+                  stroke="#111827"
+                />
+                <text x={p.x + nVec.x * 18} y={p.y + nVec.y * 18} textAnchor="middle">
+                  {(() => {
+                    const labelVal = i * distStepLabel
+                    return labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)
+                  })()}
+                </text>
+              </g>
+            )
+          })}
+          <text
+            x={(baseAxisL.x + baseAxisR.x) / 2 + nVec.x * 32}
+            y={(baseAxisL.y + baseAxisR.y) / 2 + nVec.y * 32}
+            fill="#6b7280"
+            textAnchor="middle"
+          >
+            {`Distance (${isImperial ? "mi" : "km"})`}
+          </text>
+
+          {/* elevation axis at X=W (lifted by shelf) */}
+          {(() => {
+            const yA = addShelf(P(W, 0, 0))
+            const yB = addShelf(P(W, H, 0))
+            const yT = unitVec(yA, yB)
+            const yN = { x: -yT.y, y: yT.x }
+            const lines: React.ReactNode[] = [
+              <line key="e-line" x1={yA.x} y1={yA.y} x2={yB.x} y2={yB.y} stroke="#111827" />,
+            ]
+            {
+              const maxTicks = Math.floor(H / stepYkm + 1e-6) + 1
+
+              // If a starting elevation (absolute, meters) is provided, offset labels from it.
+              // Bottom of the world (Y=0) corresponds to the relative min elevation (elevMin).
+              // So the absolute elevation at Y=0 is: startElevM + elevMin. If no start provided, use 0 (current behavior).
+              const startElevM = data.startElevM
+              const baseAbsLabel = (() => {
+                if (startElevM == null) return 0
+                const absAtBottomM = startElevM + elevMin // meters
+                return isImperial ? absAtBottomM * FT_PER_M : absAtBottomM / 1000
+              })()
+
+              for (let i = 0; i <= maxTicks; i++) {
+                const yk = i * stepYkm
+                if (yk > H + 1e-6) break
+                const p = addShelf(P(W, yk, 0))
+                const labelVal = baseAbsLabel + i * stepYLabel
+                const labelStr = isImperial
+                  ? `${Math.round(labelVal)} ft`
+                  : `${labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)} km`
+                lines.push(
+                  <g key={`ey-${i}`}>
+                    <line
+                      x1={p.x}
+                      y1={p.y}
+                      x2={p.x + yN.x * 6}
+                      y2={p.y + yN.y * 6}
+                      stroke="#111827"
+                    />
+                    <text x={p.x + yN.x * 14} y={p.y + yN.y * 14}>
+                      {labelStr}
+                    </text>
+                  </g>
+                )
+              }
+            }
+            return lines
+          })()}
+        </g>
+
+        {/* ── Grade legend ── */}
+        {legendItems.length > 0 && (
+          <g
+            transform={`translate(${legendX}, ${legendY})`}
+            fontFamily="system-ui, sans-serif"
+            fontSize={config.labelFontSize}
+          >
+            <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
+              Grade
+            </text>
+            {legendItems.map((item, idx) => {
+              const itemY = legendTitleGap + idx * legendLineHeight
+              return (
+                <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
+                  <rect
+                    width={legendSwatchSize}
+                    height={legendSwatchSize}
+                    fill={item.color}
+                    stroke="#111827"
+                    strokeWidth={0.6}
+                    rx={3}
+                    ry={3}
+                  />
+                  <text
+                    x={legendSwatchSize + 10}
+                    y={legendSwatchSize / 2}
+                    fill="#111827"
+                    dominantBaseline="middle"
+                  >
+                    {item.label}
+                  </text>
+                </g>
+              )
+            })}
+          </g>
+        )}
+      </svg>
+    </>
   )
 }
 
