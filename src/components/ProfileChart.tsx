@@ -6,6 +6,11 @@ import { accumulate, avgGrade, niceStep, toFixedN, unitVec } from "@/lib/utils/m
 import { colorForGrade } from "@/lib/utils/color"
 import { fitAxonBoundingRangeCentered } from "@/lib/utils/projection"
 
+// Unit conversion constants used across subcomponents
+const KM_PER_MI = 1.609344
+const FT_PER_M = 3.28084
+const FT_PER_KM = FT_PER_M * 1000
+
 /**
  * Axonometric elevation profile (pure SVG).
  * - Shelf/platform is a fixed *pixel* height (config.platform.heightPx).
@@ -26,67 +31,7 @@ export default function ProfileChart({
   // ────────────────────────────────────────────────────────────────────────────────
   // Derive the model once per data/config change
   // ────────────────────────────────────────────────────────────────────────────────
-  const model = useMemo(() => {
-    const { canvas, axon, roof, platform } = config
-    const segments = data.segments || []
-    const { points, totalKm, totalGainM } = accumulate(segments)
-
-    // Relative elevation span (m → km for world Y)
-    const elevMin = Math.min(...points.map((p) => p.elev))
-    const elevMax = Math.max(...points.map((p) => p.elev))
-    const elevSpanM = Math.max(10, elevMax - elevMin)
-
-    // World extents (NO shelf in world space)
-    const W = Math.max(0.001, totalKm) // km (X world)
-    const H = elevSpanM / 1000 // km (Y world)
-
-    // Ribbon Z placement along [zNear .. zFar]
-    const { zNear, zFar } = computeRoofZBounds(roof, W)
-
-    // Reserve shelf pixels in the fit so adding it later won't clip anything.
-    const fitHeight = canvas.height - (platform.heightPx || 0)
-
-    // Projector that fits + centers the world box (no shelf) in the available area.
-    const proj = fitAxonBoundingRangeCentered(
-      W,
-      H,
-      Math.min(zNear, zFar),
-      Math.max(zNear, zFar),
-      canvas.width,
-      fitHeight,
-      canvas.margin,
-      axon
-    )
-    const P0 = (X: number, Y: number, Z: number) => proj.project(X, Y, Z)
-
-    // Shelf vector in screen space: direction of +Y (world) mapped through projector,
-    // normalized and scaled to exactly platform.heightPx.
-    const shelfVec = shelfVectorPx(P0, platform.heightPx || 0)
-
-    // Center the total composition (world + shelf) by subtracting ½·shelfVec for every point.
-    const halfShelf = { x: shelfVec.x / 2, y: shelfVec.y / 2 }
-    const P = (X: number, Y: number, Z: number) => subVec(P0(X, Y, Z), halfShelf)
-
-    // Relative world points (km, km). Elevation becomes Y in km above elevMin.
-    const worldPts = points.map((p) => ({ X: p.d, Y: (p.elev - elevMin) / 1000 }))
-
-    return {
-      canvas,
-      platform,
-      segments,
-      worldPts,
-      totalKm,
-      totalGainM,
-      elevSpanM,
-      elevMin,
-      W,
-      H,
-      zNear,
-      zFar,
-      P,
-      shelfVec,
-    }
-  }, [data, config])
+  const model = useMemo(() => deriveModel(data, config), [data, config])
 
   const {
     canvas,
@@ -121,9 +66,6 @@ export default function ProfileChart({
 
   // Units and grid steps
   const isImperial = config.units === "imperial"
-  const KM_PER_MI = 1.609344
-  const FT_PER_M = 3.28084
-  const FT_PER_KM = FT_PER_M * 1000
 
   // Distance grid step: provided in user units → convert to world km for spacing
   const distStepLabel = Math.max(1e-6, config.grid.distStep || 1)
@@ -156,37 +98,6 @@ export default function ProfileChart({
   // Title stats
   const avg = avgGrade(segments)
   const gradeLabelFontSize = Math.max(1, config.labelFontSize * 0.85)
-  const legendItems = useMemo(() => {
-    const buckets = config.slopeColors || []
-    if (buckets.length === 0) return []
-
-    const formatBound = (value: number) => {
-      if (!Number.isFinite(value)) return "∞"
-      const sanitized = Math.abs(value) < 1e-6 ? 0 : value
-      const rounded = Math.round(sanitized)
-      return Math.abs(rounded - sanitized) < 1e-6 ? `${rounded}` : `${toFixedN(sanitized, 1)}`
-    }
-
-    const items: { color: string; label: string }[] = []
-    let previousUpper: number | null = null
-
-    for (const bucket of buckets) {
-      const lowerBound = previousUpper ?? Math.min(0, bucket.upTo)
-      const safeLower = Number.isFinite(lowerBound) ? lowerBound : 0
-      const label = Number.isFinite(bucket.upTo)
-        ? `${formatBound(safeLower)}-${formatBound(bucket.upTo)}%`
-        : `${formatBound(safeLower)}%+`
-      items.push({ color: bucket.color, label })
-      previousUpper = bucket.upTo
-    }
-
-    return items
-  }, [config.slopeColors])
-  const legendX = canvas.width - canvas.margin.right + 24
-  const legendY = canvas.margin.top
-  const legendSwatchSize = 16
-  const legendTitleGap = 20
-  const legendLineHeight = legendSwatchSize + 8
 
   // ────────────────────────────────────────────────────────────────────────────────
   // Render
@@ -194,36 +105,14 @@ export default function ProfileChart({
   return (
     <>
       {/* Title and stats rendered outside SVG */}
-      <div style={{ textAlign: "center", marginBottom: 8 }}>
-        <div
-          style={{
-            fontFamily: "system-ui, sans-serif",
-            fontSize: config.titleFontSize,
-            fontWeight: 800,
-            color: "var(--ink)",
-            lineHeight: 1.1,
-          }}
-        >
-          {data.name || "Climb"}
-        </div>
-        {(() => {
-          const isImperial = config.units === "imperial"
-          const KM_PER_MI = 1.609344
-          const FT_PER_M = 3.28084
-          const distVal = isImperial ? totalKm / KM_PER_MI : totalKm
-          const distStr = `${toFixedN(distVal, 1)} ${isImperial ? "mi" : "km"}`
-          const gainVal = isImperial
-            ? Math.round(totalGainM * FT_PER_M)
-            : toFixedN(totalGainM / 1000, 1)
-          const gainStr = `${gainVal} ${isImperial ? "ft" : "km"} gain`
-
-          return (
-            <div style={{ color: "var(--muted)", marginTop: 4 }}>
-              {`${distStr} • ${gainStr} • ${toFixedN(avg, 1)}% avg`}
-            </div>
-          )
-        })()}
-      </div>
+      <TitleAndStats
+        name={data.name}
+        titleFontSize={config.titleFontSize}
+        units={config.units}
+        totalKm={totalKm}
+        totalGainM={totalGainM}
+        avg={avg}
+      />
       <svg
         ref={svgRef}
         xmlns="http://www.w3.org/2000/svg"
@@ -469,43 +358,143 @@ export default function ProfileChart({
         </g>
 
         {/* ── Grade legend ── */}
-        {legendItems.length > 0 && (
-          <g
-            transform={`translate(${legendX}, ${legendY})`}
-            fontFamily="system-ui, sans-serif"
-            fontSize={config.labelFontSize}
-          >
-            <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
-              Grade
-            </text>
-            {legendItems.map((item, idx) => {
-              const itemY = legendTitleGap + idx * legendLineHeight
-              return (
-                <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
-                  <rect
-                    width={legendSwatchSize}
-                    height={legendSwatchSize}
-                    fill={item.color}
-                    stroke="#111827"
-                    strokeWidth={0.6}
-                    rx={3}
-                    ry={3}
-                  />
-                  <text
-                    x={legendSwatchSize + 10}
-                    y={legendSwatchSize / 2}
-                    fill="#111827"
-                    dominantBaseline="middle"
-                  >
-                    {item.label}
-                  </text>
-                </g>
-              )
-            })}
-          </g>
-        )}
+        <GradeLegend
+          canvas={canvas}
+          slopeColors={config.slopeColors}
+          labelFontSize={config.labelFontSize}
+        />
       </svg>
     </>
+  )
+}
+
+/**
+ * GradeLegend: renders the grade color legend and encapsulates its formatting logic.
+ */
+function GradeLegend({
+  canvas,
+  slopeColors,
+  labelFontSize,
+}: {
+  canvas: Config["canvas"]
+  slopeColors: Config["slopeColors"]
+  labelFontSize: number
+}) {
+  const legendItems = useMemo(() => {
+    const buckets = slopeColors || []
+    if (buckets.length === 0) return [] as { color: string; label: string }[]
+
+    const formatBound = (value: number) => {
+      if (!Number.isFinite(value)) return "∞"
+      const sanitized = Math.abs(value) < 1e-6 ? 0 : value
+      const rounded = Math.round(sanitized)
+      return Math.abs(rounded - sanitized) < 1e-6 ? `${rounded}` : `${toFixedN(sanitized, 1)}`
+    }
+
+    const items: { color: string; label: string }[] = []
+    let previousUpper: number | null = null
+
+    for (const bucket of buckets) {
+      const lowerBound = previousUpper ?? Math.min(0, bucket.upTo)
+      const safeLower = Number.isFinite(lowerBound) ? lowerBound : 0
+      const label = Number.isFinite(bucket.upTo)
+        ? `${formatBound(safeLower)}-${formatBound(bucket.upTo)}%`
+        : `${formatBound(safeLower)}%+`
+      items.push({ color: bucket.color, label })
+      previousUpper = bucket.upTo
+    }
+
+    return items
+  }, [slopeColors])
+
+  if (!legendItems.length) return null
+
+  const legendX = canvas.width - canvas.margin.right + 24
+  const legendY = canvas.margin.top
+  const legendSwatchSize = 16
+  const legendTitleGap = 20
+  const legendLineHeight = legendSwatchSize + 8
+
+  return (
+    <g
+      transform={`translate(${legendX}, ${legendY})`}
+      fontFamily="system-ui, sans-serif"
+      fontSize={labelFontSize}
+    >
+      <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
+        Grade
+      </text>
+      {legendItems.map((item, idx) => {
+        const itemY = legendTitleGap + idx * legendLineHeight
+        return (
+          <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
+            <rect
+              width={legendSwatchSize}
+              height={legendSwatchSize}
+              fill={item.color}
+              stroke="#111827"
+              strokeWidth={0.6}
+              rx={3}
+              ry={3}
+            />
+            <text
+              x={legendSwatchSize + 10}
+              y={legendSwatchSize / 2}
+              fill="#111827"
+              dominantBaseline="middle"
+            >
+              {item.label}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+/**
+ * TitleAndStats: displays climb title and summary stats above the SVG.
+ */
+function TitleAndStats({
+  name,
+  titleFontSize,
+  units,
+  totalKm,
+  totalGainM,
+  avg,
+}: {
+  name?: string
+  titleFontSize: number
+  units: Config["units"]
+  totalKm: number
+  totalGainM: number
+  avg: number
+}) {
+  const isImperial = units === "imperial"
+
+  const distVal = isImperial ? totalKm / KM_PER_MI : totalKm
+  const distStr = `${toFixedN(distVal, 1)} ${isImperial ? "mi" : "km"}`
+
+  const gainVal = isImperial ? Math.round(totalGainM * FT_PER_M) : toFixedN(totalGainM / 1000, 1)
+  const gainStr = `${gainVal} ${isImperial ? "ft" : "km"} gain`
+
+  return (
+    <div style={{ textAlign: "center", marginBottom: 8 }}>
+      <div
+        style={{
+          fontFamily: "system-ui, sans-serif",
+          fontSize: titleFontSize,
+          fontWeight: 800,
+          color: "var(--ink)",
+          lineHeight: 1.1,
+        }}
+      >
+        {name || "Climb"}
+      </div>
+      <div style={{ color: "var(--muted)", marginTop: 4 }}>
+        {`${distStr} • ${gainStr} • ${toFixedN(avg, 1)}% avg`}
+      </div>
+    </div>
   )
 }
 
@@ -514,6 +503,90 @@ export default function ProfileChart({
  * ─────────────────────────────────────────────────────────────────────────────── */
 
 type Pt = { x: number; y: number }
+
+// Internal model returned by deriveModel()
+type Model = {
+  canvas: Config["canvas"]
+  platform: Config["platform"]
+  segments: ClimbData["segments"]
+  worldPts: { X: number; Y: number }[]
+  totalKm: number
+  totalGainM: number
+  elevSpanM: number
+  elevMin: number
+  W: number
+  H: number
+  zNear: number
+  zFar: number
+  P: (X: number, Y: number, Z: number) => Pt
+  shelfVec: Pt
+}
+
+/**
+ * Derive the rendering model from input data and config.
+ * This was previously inline in a useMemo within ProfileChart.
+ */
+function deriveModel(data: ClimbData, config: Config): Model {
+  const { canvas, axon, roof, platform } = config
+  const segments = data.segments || []
+  const { points, totalKm, totalGainM } = accumulate(segments)
+
+  // Relative elevation span (m → km for world Y)
+  const elevMin = Math.min(...points.map((p) => p.elev))
+  const elevMax = Math.max(...points.map((p) => p.elev))
+  const elevSpanM = Math.max(10, elevMax - elevMin)
+
+  // World extents (NO shelf in world space)
+  const W = Math.max(0.001, totalKm) // km (X world)
+  const H = elevSpanM / 1000 // km (Y world)
+
+  // Ribbon Z placement along [zNear .. zFar]
+  const { zNear, zFar } = computeRoofZBounds(roof, W)
+
+  // Reserve shelf pixels in the fit so adding it later won't clip anything.
+  const fitHeight = canvas.height - (platform.heightPx || 0)
+
+  // Projector that fits + centers the world box (no shelf) in the available area.
+  const proj = fitAxonBoundingRangeCentered(
+    W,
+    H,
+    Math.min(zNear, zFar),
+    Math.max(zNear, zFar),
+    canvas.width,
+    fitHeight,
+    canvas.margin,
+    axon
+  )
+  const P0 = (X: number, Y: number, Z: number) => proj.project(X, Y, Z)
+
+  // Shelf vector in screen space: direction of +Y (world) mapped through projector,
+  // normalized and scaled to exactly platform.heightPx.
+  const shelfVec = shelfVectorPx(P0, platform.heightPx || 0)
+
+  // Center the total composition (world + shelf) by subtracting ½·shelfVec for every point.
+  const halfShelf = { x: shelfVec.x / 2, y: shelfVec.y / 2 }
+  const P = (X: number, Y: number, Z: number) => subVec(P0(X, Y, Z), halfShelf)
+
+  // Relative world points (km, km). Elevation becomes Y in km above elevMin.
+  const worldPts = points.map((p) => ({ X: p.d, Y: (p.elev - elevMin) / 1000 }))
+
+  return {
+    canvas,
+    platform,
+    segments,
+    worldPts,
+    totalKm,
+    totalGainM,
+    elevSpanM,
+    elevMin,
+    W,
+    H,
+    zNear,
+    zFar,
+    P,
+    shelfVec,
+  }
+}
 
 function computeRoofZBounds(roof: Config["roof"], W: number): { zNear: number; zFar: number } {
   const Dbase = Math.max(0.01, roof.depthOverrideKm ?? W * roof.depthFrac)

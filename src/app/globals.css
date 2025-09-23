@@ -33,21 +33,3 @@ body {
   color: var(--ink);
   background: var(--bg);
 }
-
-/* TODO: remove these button styles, use tailwind instead */
-
-button {
-  appearance: none;
-  border: 1px solid #d0d7de;
-  border-radius: 9px;
-  padding: 10px 14px;
-  cursor: pointer;
-  background: #f9fafb;
-  color: var(--ink);
-  font-weight: 600;
-}
-
-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}

@@ -138,16 +138,6 @@ Response (shape, abbreviated):
 
 There is commented sample code in `ClientApp.tsx` showing how to fetch from this route and render the results instead of the static sample.
 
-## Accessibility
-
-- The profile host uses `role="img"` with a descriptive `aria-label`.
-- Titles and value summaries are rendered as text inside the SVG.
-
-## Printing & Export
-
-- The page includes a `@page` rule for A4 landscape printing.
-- Use the built‑in buttons to download `SVG` or high‑DPI `PNG` exports.
-
 ## Notes
 
 - Built with Next.js 15 and React 19.
