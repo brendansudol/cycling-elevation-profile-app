@@ -1,46 +1,38 @@
 "use client"
 
-import React, { useRef } from "react"
+import React from "react"
 import ProfileChart from "./ProfileChart"
 import { ClimbData, Config } from "@/lib/types"
-import { downloadPNG, downloadSVG } from "@/lib/utils/download"
+import DownloadButtons from "./DownloadButtons"
 
-/**
- * Client-only wrapper so we can use refs, window/document, and download functions.
- */
-export default function ClientApp({ data, config }: { data: ClimbData; config: Config }) {
-  const svgRef = useRef<SVGSVGElement | null>(null)
+const USE_STATIC_DATA = true
 
-  const handleDownloadSVG = () => {
-    const svg = svgRef.current
-    if (!svg) return
-    downloadSVG(svg, (data.name || "climb") + ".svg")
-  }
+export default function ClientApp({
+  data: initialData,
+  config,
+}: {
+  data: ClimbData
+  config: Config
+}) {
+  const [svg, svgRefCallback] = React.useState<SVGSVGElement | null>(null)
+  const [data, setData] = React.useState<ClimbData>()
 
-  const handleDownloadPNG = () => {
-    const svg = svgRef.current
-    if (!svg) return
-    downloadPNG(svg, (data.name || "climb") + ".png", 2)
-  }
+  React.useEffect(() => {
+    ;(async () => {
+      if (USE_STATIC_DATA) return setData(initialData)
+      const res = await fetch("/api/strava/segment/5399200?bins_km=1")
+      const results = await res.json()
+      console.log("strava results:", { results })
+      setData({ name: results.name, segments: results.profile.segments })
+    })()
+  }, [])
 
-  // const [data2, setData2] = React.useState<ClimbData | null>(null)
-  // React.useEffect(() => {
-  //   ;(async () => {
-  //     const res = await fetch("/api/strava/segment/5399200?bins_km=1")
-  //     const results = await res.json()
-  //     console.log("strava results:", results)
-  //     setData2({ name: results.name, segments: results.profile.segments })
-  //   })()
-  // }, [])
+  if (data == null) return null
 
   return (
     <>
-      <ProfileChart data={data} config={config} svgRef={svgRef} />
-      {/* {data2 != null && <ProfileChart data={data2} config={config} svgRef={svgRef} />} */}
-      <div style={{ display: "flex", gap: 8, margin: "12px auto 24px", justifyContent: "center" }}>
-        <button onClick={handleDownloadSVG}>Download SVG</button>
-        <button onClick={handleDownloadPNG}>Download PNG</button>
-      </div>
+      <ProfileChart data={data} config={config} svgRef={svgRefCallback} />
+      {svg != null && <DownloadButtons svg={svg} baseFilename={data.name || "climb"} />}
     </>
   )
 }

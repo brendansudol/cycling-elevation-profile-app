@@ -72,7 +72,8 @@ All coordinates are computed in world space (km) and projected into screen space
 ## Features in Code
 
 - `src/components/ProfileChart.tsx`: Single SVG component that builds the platform, face, grid, roof ribbon, axes, and title. It computes a bounded projection that fits the world extents and centers the composition, then offsets by half the shelf to keep the overall picture balanced.
-- `src/components/ClientApp.tsx`: Client wrapper that manages the SVG ref and provides export buttons.
+- `src/components/ClientApp.tsx`: Client wrapper that manages the SVG ref and renders the chart and controls.
+- `src/components/DownloadButtons.tsx`: Small component that renders SVG/PNG export buttons given a concrete `svg` element and base filename.
 - `src/lib/utils/projection.ts`: Axonometric projector (yaw → pitch → roll) with a fit/center helper over a Z range.
 - `src/lib/utils/math.ts`: Accumulation, average grade, nice step sizing, and small vector helpers.
 - `src/lib/utils/color.ts`: Slope bucket lookup.

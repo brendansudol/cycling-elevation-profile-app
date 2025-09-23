@@ -4,21 +4,16 @@ import { CONFIG } from "@/lib/config"
 
 export default function Page() {
   return (
-    <>
-      <header className="shell">
-        <h1 className="text-2xl">Climb Profile</h1>
-        <p className="subtitle">Axonometric elevation profile.</p>
-      </header>
+    <div className="mx-auto max-w-7xl p-4 sm:p-6 lg:p-8">
+      <header className="mb-4">header</header>
 
-      <main className="shell">
-        <section className="stage" aria-label="Chart stage">
-          <div id="profile-host" role="img" aria-label="Rendered elevation profile">
-            <ClientApp data={SAMPLE} config={CONFIG} />
-          </div>
-        </section>
+      <main>
+        <div className="border border-gray-200 rounded-lg p-4">
+          <ClientApp data={SAMPLE} config={CONFIG} />
+        </div>
       </main>
 
-      <footer className="shell footnote">Built for cyclists. No external libraries.</footer>
-    </>
+      <footer className="mt-4">footer</footer>
+    </div>
   )
 }

@@ -19,7 +19,7 @@ export default function ProfileChart({
 }: {
   data: ClimbData
   config: Config
-  svgRef: React.RefObject<SVGSVGElement | null>
+  svgRef: React.Ref<SVGSVGElement>
 }) {
   const clipId = useId()
 

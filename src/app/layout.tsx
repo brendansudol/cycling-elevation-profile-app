@@ -1,6 +1,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
 
+// TODO: better text here
 export const metadata: Metadata = {
   title: "Climb Profile — Axonometric",
   description: "Axonometric elevation profile. Download SVG/PNG.",
