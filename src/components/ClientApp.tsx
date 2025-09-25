@@ -4,6 +4,7 @@ import React from "react"
 import ProfileChart from "./ProfileChart"
 import { ClimbData, Config } from "@/lib/types"
 import DownloadButtons from "./DownloadButtons"
+import { Leva, useControls, folder } from "leva"
 
 const USE_STATIC_DATA = true
 
@@ -27,11 +28,49 @@ export default function ClientApp({
     })()
   }, [])
 
+  const { yawDeg, pitchDeg, verticalExaggeration, platformHeightPx, units } = useControls({
+    Camera: folder({
+      yawDeg: { value: config.axon.yawDeg, min: 0, max: 90, step: 1 },
+      pitchDeg: { value: config.axon.pitchDeg, min: 0, max: 90, step: 1 },
+      verticalExaggeration: {
+        value: config.axon.verticalExaggeration,
+        min: 1,
+        max: 20,
+        step: 0.25,
+      },
+    }),
+    Platform: folder({
+      platformHeightPx: { value: config.platform.heightPx, min: 0, max: 160, step: 1 },
+    }),
+    Units: folder({
+      units: { value: config.units, options: { metric: "metric", imperial: "imperial" } },
+    }),
+  })
+
+  const liveConfig: Config = React.useMemo(
+    () => ({
+      ...config,
+      units: units as Config["units"],
+      axon: {
+        ...config.axon,
+        yawDeg,
+        pitchDeg,
+        verticalExaggeration,
+      },
+      platform: {
+        ...config.platform,
+        heightPx: platformHeightPx,
+      },
+    }),
+    [config, units, yawDeg, pitchDeg, verticalExaggeration, platformHeightPx]
+  )
+
   if (data == null) return null
 
   return (
     <>
-      <ProfileChart data={data} config={config} svgRef={svgRefCallback} />
+      <Leva collapsed />
+      <ProfileChart data={data} config={liveConfig} svgRef={svgRefCallback} />
       {svg != null && <DownloadButtons svg={svg} baseFilename={data.name || "climb"} />}
     </>
   )
