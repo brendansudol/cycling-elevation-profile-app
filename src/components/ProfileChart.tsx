@@ -252,7 +252,7 @@ export default function ProfileChart({
 
             const midX = (start.X + end.X) / 2
             const basePoint = P(midX, 0, 0)
-            const shelfFraction = 0.68
+            const shelfFraction = 0.5
             const offset =
               shelfLength > 1e-6
                 ? { x: shelfVec.x * shelfFraction, y: shelfVec.y * shelfFraction }
@@ -289,23 +289,18 @@ export default function ProfileChart({
                   y2={p.y + nVec.y * 8}
                   stroke="#111827"
                 />
-                <text x={p.x + nVec.x * 18} y={p.y + nVec.y * 18} textAnchor="middle">
+                <text x={p.x + nVec.x * 18} y={p.y + nVec.y * 20} textAnchor="middle">
                   {(() => {
                     const labelVal = i * distStepLabel
-                    return labelVal % 1 === 0 ? labelVal : toFixedN(labelVal, 1)
+                    const numStr = labelVal % 1 === 0 ? String(labelVal) : toFixedN(labelVal, 1)
+                    const unitStr = i === 0 ? ` ${isImperial ? "mi" : "km"}` : ""
+                    return `${numStr}${unitStr}`
                   })()}
                 </text>
               </g>
             )
           })}
-          <text
-            x={(baseAxisL.x + baseAxisR.x) / 2 + nVec.x * 32}
-            y={(baseAxisL.y + baseAxisR.y) / 2 + nVec.y * 32}
-            fill="#6b7280"
-            textAnchor="middle"
-          >
-            {`Distance (${isImperial ? "mi" : "km"})`}
-          </text>
+          {/* Removed axis title: units now shown next to first tick label */}
 
           {/* elevation axis at X=W (lifted by shelf) */}
           {(() => {
@@ -409,32 +404,25 @@ function GradeLegend({
   const legendSwatchSize = 16
   const gapSwatchToText = 10
   const gapBetweenItems = 20
-  const gapAfterTitle = 14
 
   // Approximate text width in pixels (simple heuristic)
   const approxTextWidth = (text: string) => Math.ceil(text.length * labelFontSize * 0.6)
 
-  // Compute total width to center the whole legend row
-  const titleText = "Grade:"
-  const titleWidth = approxTextWidth(titleText)
+  // Compute total width to center the whole legend row (no title)
   const itemsWidth = legendItems.reduce((sum, it, idx) => {
     const textW = approxTextWidth(it.label)
     const itemW = legendSwatchSize + gapSwatchToText + textW
     return sum + itemW + (idx < legendItems.length - 1 ? gapBetweenItems : 0)
   }, 0)
-  const totalWidth = titleWidth + gapAfterTitle + itemsWidth
+  const totalWidth = itemsWidth
   const startX = canvas.width / 2 - totalWidth / 2
   const baselineY = canvas.height - canvas.margin.bottom + 20
 
   return (
     <g transform={`translate(0, 0)`} fontFamily="system-ui, sans-serif" fontSize={labelFontSize}>
-      {/* Title at start of the row */}
-      <text x={startX} y={baselineY} fontWeight={700} fill="#111827" dominantBaseline="middle">
-        {titleText}
-      </text>
       {(() => {
-        // Lay out items from left to right starting after the title
-        let cursorX = startX + titleWidth + gapAfterTitle
+        // Lay out items from left to right (no title)
+        let cursorX = startX
         return legendItems.map((item, idx) => {
           const textW = approxTextWidth(item.label)
           const groupX = cursorX
@@ -450,8 +438,6 @@ function GradeLegend({
                 width={legendSwatchSize}
                 height={legendSwatchSize}
                 fill={item.color}
-                stroke="#111827"
-                strokeWidth={0.6}
                 rx={3}
                 ry={3}
               />

@@ -69,7 +69,7 @@ export default function ClientApp({
 
   return (
     <>
-      <Leva collapsed />
+      <Leva collapsed={true} titleBar={{ title: "Controls" }} />
       <ProfileChart data={data} config={liveConfig} svgRef={svgRefCallback} />
       {svg != null && <DownloadButtons svg={svg} baseFilename={data.name || "climb"} />}
     </>
