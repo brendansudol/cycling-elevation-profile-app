@@ -357,7 +357,6 @@ export default function ProfileChart({
           })()}
         </g>
 
-        {/* ── Grade legend ── */}
         <GradeLegend
           canvas={canvas}
           slopeColors={config.slopeColors}
@@ -368,9 +367,6 @@ export default function ProfileChart({
   )
 }
 
-/**
- * GradeLegend: renders the grade color legend and encapsulates its formatting logic.
- */
 function GradeLegend({
   canvas,
   slopeColors,
@@ -409,52 +405,67 @@ function GradeLegend({
 
   if (!legendItems.length) return null
 
-  const legendX = canvas.width - canvas.margin.right + 24
-  const legendY = canvas.margin.top
+  // Inline, bottom-centered legend layout
   const legendSwatchSize = 16
-  const legendTitleGap = 20
-  const legendLineHeight = legendSwatchSize + 8
+  const gapSwatchToText = 10
+  const gapBetweenItems = 20
+  const gapAfterTitle = 14
+
+  // Approximate text width in pixels (simple heuristic)
+  const approxTextWidth = (text: string) => Math.ceil(text.length * labelFontSize * 0.6)
+
+  // Compute total width to center the whole legend row
+  const titleText = "Grade:"
+  const titleWidth = approxTextWidth(titleText)
+  const itemsWidth = legendItems.reduce((sum, it, idx) => {
+    const textW = approxTextWidth(it.label)
+    const itemW = legendSwatchSize + gapSwatchToText + textW
+    return sum + itemW + (idx < legendItems.length - 1 ? gapBetweenItems : 0)
+  }, 0)
+  const totalWidth = titleWidth + gapAfterTitle + itemsWidth
+  const startX = canvas.width / 2 - totalWidth / 2
+  const baselineY = canvas.height - canvas.margin.bottom + 20
 
   return (
-    <g
-      transform={`translate(${legendX}, ${legendY})`}
-      fontFamily="system-ui, sans-serif"
-      fontSize={labelFontSize}
-    >
-      <text x={0} y={0} fontWeight={700} fill="#111827" dominantBaseline="hanging">
-        Grade
+    <g transform={`translate(0, 0)`} fontFamily="system-ui, sans-serif" fontSize={labelFontSize}>
+      {/* Title at start of the row */}
+      <text x={startX} y={baselineY} fontWeight={700} fill="#111827" dominantBaseline="middle">
+        {titleText}
       </text>
-      {legendItems.map((item, idx) => {
-        const itemY = legendTitleGap + idx * legendLineHeight
-        return (
-          <g key={`legend-${idx}`} transform={`translate(0, ${itemY})`}>
-            <rect
-              width={legendSwatchSize}
-              height={legendSwatchSize}
-              fill={item.color}
-              stroke="#111827"
-              strokeWidth={0.6}
-              rx={3}
-              ry={3}
-            />
-            <text
-              x={legendSwatchSize + 10}
-              y={legendSwatchSize / 2}
-              fill="#111827"
-              dominantBaseline="middle"
-            >
-              {item.label}
-            </text>
-          </g>
-        )
-      })}
+      {(() => {
+        // Lay out items from left to right starting after the title
+        let cursorX = startX + titleWidth + gapAfterTitle
+        return legendItems.map((item, idx) => {
+          const textW = approxTextWidth(item.label)
+          const groupX = cursorX
+          const swatchX = groupX
+          const textX = groupX + legendSwatchSize + gapSwatchToText
+          const gapAfter = idx < legendItems.length - 1 ? gapBetweenItems : 0
+          cursorX += legendSwatchSize + gapSwatchToText + textW + gapAfter // advance cursor for next item
+          return (
+            <g key={`legend-${idx}`}>
+              <rect
+                x={swatchX}
+                y={baselineY - legendSwatchSize / 2}
+                width={legendSwatchSize}
+                height={legendSwatchSize}
+                fill={item.color}
+                stroke="#111827"
+                strokeWidth={0.6}
+                rx={3}
+                ry={3}
+              />
+              <text x={textX} y={baselineY} fill="#111827" dominantBaseline="middle">
+                {item.label}
+              </text>
+            </g>
+          )
+        })
+      })()}
     </g>
   )
 }
 
-/**
- * TitleAndStats: displays climb title and summary stats above the SVG.
- */
 function TitleAndStats({
   name,
   titleFontSize,
